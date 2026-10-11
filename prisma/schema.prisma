@@ -1,0 +1,213 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email             String?              @unique
+  name              String?
+  nationalId        String?              @map("national_id")
+  passwordHash      String?              @map("password_hash")
+  nafathVerified    Boolean              @default(false) @map("nafath_verified")
+  role              String               @default("resident")
+  preferredLanguage String               @default("ar") @map("preferred_language")
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  preferences       UserPreference?
+  requests          TranslationRequest[]
+  history           TranslationHistory[]
+  orgMemberships    OrganizationMember[]
+  usageEvents       UsageEvent[]
+  subscriptions     Subscription[]
+  consentRecords    ConsentRecord[]
+
+  @@map("users")
+}
+
+model UserPreference {
+  userId             String   @id @map("user_id") @db.Uuid
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceLanguage     String   @default("en") @map("source_language")
+  targetLanguage     String   @default("ar") @map("target_language")
+  historyEnabled     Boolean  @default(false) @map("history_enabled")
+  consentPreferences Json     @default("{}") @map("consent_preferences")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("user_preferences")
+}
+
+model Organization {
+  id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String
+  status        String               @default("active")
+  plan          String               @default("free")
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  members       OrganizationMember[]
+  documents     KnowledgeDocument[]
+  glossary      GlossaryTerm[]
+  usageEvents   UsageEvent[]
+  subscriptions Subscription[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  role           String       @default("member")
+  status         String       @default("active")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+model LanguagePair {
+  sourceLanguage       String   @map("source_language")
+  targetLanguage       String   @map("target_language")
+  enabled              Boolean  @default(true)
+  providerCapabilities Json     @default("{}") @map("provider_capabilities")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@id([sourceLanguage, targetLanguage])
+  @@map("language_pairs")
+}
+
+model TranslationRequest {
+  requestId      String               @id @default(dbgenerated("gen_random_uuid()")) @map("request_id") @db.Uuid
+  userId         String?              @map("user_id") @db.Uuid
+  user           User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  provider       String
+  sourceLanguage String               @map("source_language")
+  targetLanguage String               @map("target_language")
+  status         String
+  characterCount Int                  @default(0) @map("character_count")
+  durationMs     Int                  @default(0) @map("duration_ms")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  historyEntries TranslationHistory[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("translation_requests")
+}
+
+model TranslationHistory {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String              @map("user_id") @db.Uuid
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId          String?             @map("request_id") @db.Uuid
+  request            TranslationRequest? @relation(fields: [requestId], references: [requestId], onDelete: SetNull)
+  encryptedContent   String              @map("encrypted_content")
+  sourceLanguage     String              @map("source_language")
+  targetLanguage     String              @map("target_language")
+  retentionExpiresAt DateTime?           @map("retention_expires_at") @db.Timestamptz
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("translation_history")
+}
+
+model KnowledgeDocument {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String?          @map("organization_id") @db.Uuid
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title           String
+  language        String
+  sourceReference String?          @map("source_reference")
+  owner           String?
+  version         String           @default("1.0")
+  reviewedAt      DateTime?        @map("reviewed_at") @db.Timestamptz
+  status          String           @default("published")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  chunks          KnowledgeChunk[]
+
+  @@index([organizationId, status])
+  @@map("knowledge_documents")
+}
+
+model KnowledgeChunk {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentId       String            @map("document_id") @db.Uuid
+  document         KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkText        String            @map("chunk_text")
+  sectionReference String?           @map("section_reference")
+  metadata         Json              @default("{}")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([documentId])
+  @@map("knowledge_chunks")
+}
+
+model GlossaryTerm {
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String?       @map("organization_id") @db.Uuid
+  organization         Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceTerm           String        @map("source_term")
+  sourceLanguage       String        @map("source_language")
+  approvedTranslations Json          @default("[]") @map("approved_translations")
+  context              String?
+  version              String        @default("1.0")
+  status               String        @default("active")
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([organizationId, sourceLanguage, sourceTerm])
+  @@map("glossary_terms")
+}
+
+model UsageEvent {
+  id                BigInt        @id @default(autoincrement())
+  userId            String?       @map("user_id") @db.Uuid
+  user              User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organizationId    String?       @map("organization_id") @db.Uuid
+  organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  operation         String
+  provider          String?
+  inputCharacters   Int           @default(0) @map("input_characters")
+  status            String
+  durationMs        Int           @default(0) @map("duration_ms")
+  costEstimateCents Decimal       @default(0.0) @map("cost_estimate_cents") @db.Decimal(10, 4)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("usage_events")
+}
+
+model Subscription {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerUserId         String?       @map("owner_user_id") @db.Uuid
+  ownerUser           User?         @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  ownerOrgId          String?       @map("owner_org_id") @db.Uuid
+  ownerOrg            Organization? @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  providerPurchaseRef String?       @unique @map("provider_purchase_ref")
+  entitlement         String
+  status              String
+  renewalExpiresAt    DateTime?     @map("renewal_expires_at") @db.Timestamptz
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("subscriptions")
+}
+
+model ConsentRecord {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consentPurpose String   @map("consent_purpose")
+  policyVersion  String   @map("policy_version")
+  choice         Boolean
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([userId, consentPurpose])
+  @@map("consent_records")
+}

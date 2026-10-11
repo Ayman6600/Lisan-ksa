@@ -1,0 +1,18 @@
+{
+  "name": "lisan-ksa",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "prisma:studio": "prisma studio",
+    "prisma:pull": "prisma db pull",
+    "prisma:generate": "prisma generate",
+    "backend:start": "cd backend && go run ./cmd/api",
+    "frontend:start": "cd frontend && npx expo start"
+  },
+  "devDependencies": {
+    "prisma": "^6.4.1"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.4.1"
+  }
+}

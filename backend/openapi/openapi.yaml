@@ -1,0 +1,373 @@
+openapi: 3.0.3
+info:
+  title: Lisan KSA API
+  version: 1.0.0
+  description: >
+    Lisan KSA backend API providing multilingual translation, digital guidance,
+    and cultural assistance designed for Saudi Arabia.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /health:
+    get:
+      summary: Liveness check
+      description: Returns service liveness status.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: lisan-ksa-api
+                  time:
+                    type: string
+                    format: date-time
+
+  /ready:
+    get:
+      summary: Dependency readiness check
+      description: Verifies database and cache readiness without exposing internal secrets.
+      responses:
+        '200':
+          description: All dependencies ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: Dependency unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+
+  /api/v1/languages:
+    get:
+      summary: Supported language metadata and capabilities
+      responses:
+        '200':
+          description: List of supported languages and script directions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  languages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Language'
+
+  /api/v1/auth/login:
+    post:
+      summary: Authenticate with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Authenticated session and token
+
+  /api/v1/auth/register:
+    post:
+      summary: Register a new user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string }
+                password: { type: string }
+                nationalId: { type: string }
+                preferredLanguage: { type: string }
+      responses:
+        '201':
+          description: User created successfully
+
+  /api/v1/auth/nafath:
+    post:
+      summary: Saudi Nafath Unified National Access SSO challenge and verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nationalId]
+              properties:
+                nationalId: { type: string, description: '10-digit National ID or Iqama number' }
+                stage: { type: string, enum: [challenge, verify] }
+      responses:
+        '200':
+          description: Challenge code or verified authenticated session
+
+  /api/v1/auth/me:
+    get:
+      summary: Get currently authenticated user profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile and preferences
+
+  /api/v1/translations/text:
+    post:
+      summary: Translate user-supplied text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateTextRequest'
+      responses:
+        '200':
+          description: Successful translation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateResponse'
+        '400':
+          description: Invalid request payload or unsupported language
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Translation provider not configured or unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/translations/image:
+    post:
+      summary: OCR then translate a bounded image upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                sourceLang:
+                  type: string
+                  example: en
+                targetLang:
+                  type: string
+                  example: ar
+      responses:
+        '200':
+          description: Extracted OCR blocks and translation
+        '503':
+          description: Provider not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/explanations:
+    post:
+      summary: Explain unfamiliar content in plain language
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+                - userLanguage
+              properties:
+                text:
+                  type: string
+                userLanguage:
+                  type: string
+                  example: ar
+                context:
+                  type: string
+      responses:
+        '200':
+          description: Plain language explanation with citations and uncertainty labels
+
+  /api/v1/knowledge/search:
+    get:
+      summary: Search approved instructions and return source references
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching knowledge chunks
+
+  /api/v1/glossary:
+    get:
+      summary: Retrieve approved terminology scoped to user/organization
+      responses:
+        '200':
+          description: Approved terms and context
+
+  /api/v1/me/preferences:
+    get:
+      summary: Read preferences for authenticated user
+      responses:
+        '200':
+          description: User preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreferences'
+    put:
+      summary: Update preferences for authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPreferences'
+      responses:
+        '200':
+          description: Updated user preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreferences'
+
+  /api/v1/history:
+    get:
+      summary: Read opt-in translation history
+      responses:
+        '200':
+          description: Saved translations
+    delete:
+      summary: Delete opt-in translation history
+      responses:
+        '200':
+          description: History deleted successfully
+
+  /api/v1/usage:
+    get:
+      summary: Return current usage and remaining quota
+      responses:
+        '200':
+          description: Current usage summary
+
+components:
+  schemas:
+    ReadinessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ready
+        database:
+          type: string
+          example: connected
+        redis:
+          type: string
+          example: connected
+
+    Language:
+      type: object
+      properties:
+        code:
+          type: string
+          example: ar
+        name:
+          type: string
+          example: Arabic
+        nativeName:
+          type: string
+          example: العربية
+        direction:
+          type: string
+          enum: [ltr, rtl]
+          example: rtl
+
+    TranslateTextRequest:
+      type: object
+      required:
+        - text
+        - targetLang
+      properties:
+        text:
+          type: string
+          example: Please submit your application before the deadline.
+        sourceLang:
+          type: string
+          example: en
+        targetLang:
+          type: string
+          example: ar
+
+    TranslateResponse:
+      type: object
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        sourceLang:
+          type: string
+          example: en
+        targetLang:
+          type: string
+          example: ar
+        translatedText:
+          type: string
+          example: يُرجى تقديم طلبك قبل الموعد النهائي.
+        provider:
+          type: string
+          example: configured-provider
+        status:
+          type: string
+          example: completed
+
+    UserPreferences:
+      type: object
+      properties:
+        sourceLanguage:
+          type: string
+          example: en
+        targetLanguage:
+          type: string
+          example: ar
+        historyEnabled:
+          type: boolean
+          example: false
+        consentPreferences:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: provider_not_configured
+        message:
+          type: string
+          example: Text translation provider is not configured.
+        requestId:
+          type: string

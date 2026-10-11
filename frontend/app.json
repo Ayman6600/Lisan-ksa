@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Lisan KSA",
+    "slug": "lisan-ksa",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "sa.lisan.app"
+    },
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#FFFFFF",
+      "translucent": true
+    },
+    "plugins": [
+      "expo-audio"
+    ]
+  }
+}
